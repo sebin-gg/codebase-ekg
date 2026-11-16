@@ -28,7 +28,7 @@ describe('toFhirBundle', () => {
     expect(hr).toMatchObject({
       id: expect.stringMatching(/^ekg-8867-4-[A-Za-z0-9.-]+-\d+$/),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
-      subject: { reference: expect.stringMatching(/^Patient\//), display: 'github:acme/app' },
+      subject: { reference: expect.stringMatching(/^urn:codebase-ekg:patient:/), display: 'github:acme/app' },
       effectiveDateTime: '2026-11-03T00:00:00.000Z',
     });
     const byCode = Object.fromEntries(obs.map((e) => [e.resource.code.coding[0]!.code, e.resource as Record<string, unknown>]));

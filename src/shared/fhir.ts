@@ -15,11 +15,12 @@ export function toFhirBundle({ signals, vitals }: Reading) {
   // Slugs lose information (a/b == a-b) — a short hash keeps ids unique across repos.
   const rawKey = `${signals.source}:${signals.repo}`;
   let h = 5381;
-  for (const c of rawKey) h = ((h << 5) + h + c.charCodeAt(0)) | 0;
+  for (const c of rawKey) h = ((h << 5) + h + (c.codePointAt(0) ?? 0)) | 0;
   const repoHash = (h >>> 0).toString(36);
   const patientId = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-').slice(0, 55)}-${repoHash}`;
-  const subject = { reference: `Patient/${patientId}`, display: rawKey };
   const repoUrn = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-')}-${repoHash}`;
+  // Absolute reference = the entry's fullUrl, so it resolves either way.
+  const subject = { reference: `urn:codebase-ekg:patient:${repoUrn}`, display: rawKey };
   // FHIR logical ids allow [A-Za-z0-9.-]{1,64} — ISO timestamps carry ':' so use epoch millis.
   const sampleKey = String(new Date(signals.sampledAt).getTime() || 0);
   // Slug bounded so the hash always survives inside the 64-char id budget.
