@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, delimiter, dirname, join, resolve, sep } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { RepoSignals } from '../../shared/types.ts';
 import { InputError } from '../errors.ts';
 import { githubSource, parseGithubTarget } from './github.ts';
@@ -65,7 +65,11 @@ export function openSource(kind: string, target: string, allowLocal: boolean): S
     const want = canon(dir);
     const roots = [process.cwd(), homedir(), ...(process.env.EKG_LOCAL_ROOT ?? '').split(delimiter).filter(Boolean)]
       .map((r) => canon(r));
-    if (!roots.some((r) => want === r || want.startsWith(r.endsWith(sep) ? r : r + sep))) {
+    const inside = (r: string) => {
+      const rel = relative(r, want);
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    };
+    if (!roots.some(inside)) {
       throw new InputError('Local patients must live under the server cwd, your home directory, or EKG_LOCAL_ROOT');
     }
     key = `local:${dir}`;
