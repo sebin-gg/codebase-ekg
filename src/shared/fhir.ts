@@ -46,9 +46,13 @@ export function toFhirBundle({ signals, vitals }: Reading) {
     observation('8310-5', 'Body temperature', { valueQuantity: quantity(vitals.temp, 'C', 'Cel') }),
   ];
   if (vitals.spo2 !== null) {
-    entry.push(observation('59408-5', 'Oxygen saturation in Arterial blood by Pulse oximetry', {
+    const spo2 = observation('59408-5', 'Oxygen saturation in Arterial blood by Pulse oximetry', {
       valueQuantity: quantity(vitals.spo2, '%', '%'),
-    }));
+    });
+    // The R4 vital-signs profile mandates the 2708-6 magic code alongside the
+    // more specific pulse-oximetry code.
+    spo2.resource.code.coding.push({ system: LOINC, code: '2708-6', display: 'Oxygen saturation in Arterial blood' });
+    entry.push(spo2);
   }
   if (vitals.bp) {
     entry.push(observation('85354-9', 'Blood pressure panel with all children optional', {

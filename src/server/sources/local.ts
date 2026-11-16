@@ -73,7 +73,8 @@ function runTests(cwd: string, cmd: string): Promise<CheckTally> {
   // Tokenize without a shell: the env var is trusted input, but keeping it
   // out of shell interpretation removes an injection surface entirely.
   const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
-    .map((t) => (t.length > 1 && t[0] === t[t.length - 1] && (t[0] === '"' || t[0] === "'") ? t.slice(1, -1) : t));
+    // Remove quote delimiters wherever they wrap a span (`--eval="x"` → `--eval=x`).
+    .map((t) => t.replace(/"([^"]*)"|'([^']*)'/g, (_m, d: string | undefined, s: string | undefined) => d ?? s ?? ''));
   const [file, ...args] = argv;
   return new Promise((resolve) => {
     if (!file) {
