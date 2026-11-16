@@ -86,7 +86,12 @@ function runTests(cwd: string, cmd: string): Promise<CheckTally> {
     const [bin, argv2] = resolved.shell
       ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`]]
       : [resolved.file, args];
-    execFile(bin, argv2, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
+    execFile(bin, argv2, {
+      cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
+      // The /c payload is a hand-quoted command line; Node's default re-quoting
+      // would escape the embedded quotes as \" which cmd.exe can't parse.
+      windowsVerbatimArguments: resolved.shell,
+    }, (err, stdout, stderr) =>
       resolve(tallyTestOutput(`${stdout}\n${stderr}`, err ? 1 : 0)));
   });
 }
