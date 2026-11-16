@@ -12,6 +12,7 @@ const dev = process.argv.includes('--dev');
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 1313);
 const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
+const wildcard = ['0.0.0.0', '::'].includes(host);
 const allowLocal = process.env.EKG_ALLOW_LOCAL ? process.env.EKG_ALLOW_LOCAL === '1' : loopback;
 const dist = resolve(import.meta.dirname, '../../dist');
 const MIME: Record<string, string> = {
@@ -104,7 +105,7 @@ let vite: ViteDevServer | undefined;
 
 const server = createServer((req, res) => {
   const hostname = (req.headers.host ?? '').replace(/:\d+$/, '');
-  if (loopback && !['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
+  if (!wildcard && !['localhost', '127.0.0.1', '[::1]', host].includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);
   if (vite) return vite.middlewares(req, res);

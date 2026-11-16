@@ -14,7 +14,18 @@ const reading: Reading = {
 describe('toFhirBundle', () => {
   it('emits LOINC-coded vital-sign observations with UCUM units', () => {
     const bundle = toFhirBundle(reading);
-    expect(bundle).toMatchObject({ resourceType: 'Bundle', type: 'collection', timestamp: '2026-11-03T00:00:00.000Z' });
+    expect(bundle).toMatchObject({ resourceType: 'Bundle', type: 'collection' });
+    // Bundle.timestamp is assembly time (~now), not the observation time.
+    expect(Math.abs(Date.parse(bundle.timestamp) - Date.now())).toBeLessThan(60_000);
+    // Observations carry the sample time as effectiveDateTime, a Patient
+    // reference subject, an id, and the vital-signs profile.
+    const hr = bundle.entry.find((e) => e.resource.code.coding[0]!.code === '8867-4')!.resource;
+    expect(hr).toMatchObject({
+      id: expect.stringMatching(/^ekg-8867-4-\d+$/),
+      meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
+      subject: { reference: expect.stringMatching(/^Patient\//), display: 'github:acme/app' },
+      effectiveDateTime: '2026-11-03T00:00:00.000Z',
+    });
     const byCode = Object.fromEntries(bundle.entry.map((e) => [e.resource.code.coding[0]!.code, e.resource as Record<string, unknown>]));
     expect(Object.keys(byCode).sort()).toEqual(['59408-5', '8310-5', '85354-9', '8867-4']);
     expect(byCode['8867-4']).toMatchObject({ valueQuantity: { value: 72, code: '/min', system: 'http://unitsofmeasure.org' } });

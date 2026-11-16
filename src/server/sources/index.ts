@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { resolve, sep } from 'node:path';
 import type { RepoSignals } from '../../shared/types.ts';
 import { InputError } from '../errors.ts';
 import { githubSource, parseGithubTarget } from './github.ts';
@@ -39,6 +40,13 @@ export function openSource(kind: string, target: string, allowLocal: boolean): S
     if (!allowLocal) throw new InputError('Local admissions are disabled on this server');
     if (!target.trim()) throw new InputError('Give the path to a local git repository');
     const dir = resolve(target.trim());
+    // Confinement: local repos must live under the server cwd, the user's home,
+    // or a path listed in EKG_LOCAL_ROOT (';' separated).
+    const roots = [process.cwd(), homedir(), ...(process.env.EKG_LOCAL_ROOT ?? '').split(';').filter(Boolean)]
+      .map((r) => resolve(r));
+    if (!roots.some((r) => dir === r || dir.startsWith(r + sep))) {
+      throw new InputError('Local patients must live under the server cwd, your home directory, or EKG_LOCAL_ROOT');
+    }
     key = `local:${dir}`;
     create = () => localSource(dir);
   } else {

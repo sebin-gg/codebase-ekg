@@ -1,8 +1,8 @@
-import { exec, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { basename } from 'node:path';
 import { promisify } from 'node:util';
 import type { CheckTally, CommitNote, RepoSignals } from '../../shared/types.ts';
-import { InputError } from '../errors.ts';
+import { InputError, messageOf } from '../errors.ts';
 import type { Source } from './types.ts';
 
 const execFileP = promisify(execFile);
@@ -42,8 +42,13 @@ export function tallyTestOutput(output: string, exitCode: number): CheckTally {
 }
 
 function runTests(cwd: string, cmd: string): Promise<CheckTally> {
+  // Tokenize without a shell: the env var is trusted input, but keeping it
+  // out of shell interpretation removes an injection surface entirely.
+  const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ''));
+  const [file, ...args] = argv;
   return new Promise((resolve) => {
-    exec(cmd, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
+    if (!file) return resolve({ passed: 0, failed: 1, pending: 0 });
+    execFile(file, args, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
       resolve(tallyTestOutput(`${stdout}\n${stderr}`, err ? 1 : 0)));
   });
 }
@@ -77,7 +82,8 @@ export function localSource(dir: string, testCmd = process.env.EKG_TEST_CMD): So
       }
 
       const since = `--since=${new Date(now - 24 * HOUR).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
-      const log = (extra: string[]) => git(cwd, ['log', '--branches', '--remotes', '--numstat', FORMAT, ...extra]).catch(() => '');
+      const log = (extra: string[]) => git(cwd, ['log', '--branches', '--remotes', '--numstat', FORMAT, ...extra])
+        .catch((e: unknown) => { process.stderr.write(`ekg: git log failed in ${cwd}: ${messageOf(e)}\n`); return ''; });
       const [recentOut, dayOut, statusOut] = await Promise.all([
         log(['-n', '12']),
         log([since]),

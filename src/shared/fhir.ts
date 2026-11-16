@@ -12,11 +12,14 @@ const quantity = (value: number, unit: string, code: string) => ({ value, unit, 
 /** Renders a reading as an HL7 FHIR R4 collection Bundle of LOINC-coded vital-sign Observations. */
 export function toFhirBundle({ signals, vitals }: Reading) {
   const effectiveDateTime = new Date(signals.sampledAt).toISOString();
-  const subject = { display: `${signals.source}:${signals.repo}` };
+  const patientId = `${signals.source}-${signals.repo}`.replace(/[^A-Za-z0-9.-]/g, '-');
+  const subject = { reference: `Patient/${patientId}`, display: `${signals.source}:${signals.repo}` };
   const observation = (code: string, display: string, value: object) => ({
     fullUrl: `urn:codebase-ekg:${signals.source}:${signals.repo}:${code}:${signals.sampledAt}`,
     resource: {
       resourceType: 'Observation',
+      id: `ekg-${code}-${signals.sampledAt}`,
+      meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       status: 'final',
       category: VITAL_SIGNS,
       code: loinc(code, display),
@@ -43,5 +46,5 @@ export function toFhirBundle({ signals, vitals }: Reading) {
       ],
     }));
   }
-  return { resourceType: 'Bundle', type: 'collection', timestamp: effectiveDateTime, entry };
+  return { resourceType: 'Bundle', type: 'collection', timestamp: new Date().toISOString(), entry };
 }
