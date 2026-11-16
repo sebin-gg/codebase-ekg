@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, extname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { CheckTally, CommitNote, RepoSignals } from '../../shared/types.ts';
 import { InputError, messageOf } from '../errors.ts';
@@ -44,17 +44,26 @@ export function tallyTestOutput(output: string, exitCode: number): CheckTally {
 
 /** Resolves `file` on PATH; returns it directly, or via ComSpec for .cmd/.bat
  *  shims which cannot be spawned without a shell on Windows. */
-function resolveCmd(file: string): { file: string; shell: boolean } | null {
+function resolveCmd(file: string, cwd: string): { file: string; shell: boolean } | null {
   if (process.platform !== 'win32') return { file, shell: false };
-  // Path-qualified names (absolute or containing separators) resolve directly.
+  const shellExts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';').map((e) => e.toLowerCase());
+  const asResult = (full: string) => ({ file: full, shell: ['.cmd', '.bat'].includes(extname(full).toLowerCase()) });
+  // Path-qualified names (absolute or containing separators) resolve against the repo cwd.
   if (/[/\\]/.test(file)) {
-    return existsSync(file) ? { file, shell: /\.(cmd|bat)$/i.test(file) } : null;
+    const full = resolve(cwd, file);
+    if (existsSync(full)) return asResult(full);
+    for (const ext of shellExts) {
+      if (existsSync(full + ext)) return asResult(full + ext);
+    }
+    return null;
   }
-  const dirs = (process.env.PATH ?? '').split(';').filter(Boolean);
-  for (const ext of ['', '.exe', '.cmd', '.bat']) {
-    for (const dir of dirs) {
+  // Windows resolves directory-major; PATH entries may carry quotes.
+  const dirs = (process.env.PATH ?? '').split(';').map((d) => d.replace(/^"|"$/g, '')).filter(Boolean);
+  for (const dir of dirs) {
+    for (const ext of ['', ...shellExts]) {
       const full = join(dir, file + ext);
-      if (existsSync(full)) return { file: full, shell: ext === '.cmd' || ext === '.bat' };
+      if (existsSync(full)) return asResult(full);
     }
   }
   return null;
@@ -63,15 +72,17 @@ function resolveCmd(file: string): { file: string; shell: boolean } | null {
 function runTests(cwd: string, cmd: string): Promise<CheckTally> {
   // Tokenize without a shell: the env var is trusted input, but keeping it
   // out of shell interpretation removes an injection surface entirely.
-  const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ''));
+  const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
+    .map((t) => (t.length > 1 && t[0] === t[t.length - 1] && (t[0] === '"' || t[0] === "'") ? t.slice(1, -1) : t));
   const [file, ...args] = argv;
   return new Promise((resolve) => {
     if (!file) {
       process.stderr.write(`ekg: EKG_TEST_CMD is empty or unparseable: ${JSON.stringify(cmd)}\n`);
       return resolve({ passed: 0, failed: 1, pending: 0 });
     }
-    const resolved = resolveCmd(file) ?? { file, shell: false };
-    // cmd.exe needs the whole command line as one string after /c.
+    const resolved = resolveCmd(file, cwd) ?? { file, shell: false };
+    // cmd.exe needs the whole command line as one string after /c. %VAR% in args
+    // still expands under cmd, but EKG_TEST_CMD is operator-supplied input.
     const [bin, argv2] = resolved.shell
       ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`]]
       : [resolved.file, args];

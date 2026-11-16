@@ -15,11 +15,13 @@ export function toFhirBundle({ signals, vitals }: Reading) {
   const patientId = `${signals.source}-${signals.repo}`.replace(/[^A-Za-z0-9.-]/g, '-').slice(0, 64);
   const subject = { reference: `Patient/${patientId}`, display: `${signals.source}:${signals.repo}` };
   const repoUrn = `${signals.source}-${signals.repo}`.replace(/[^A-Za-z0-9.-]/g, '-');
+  // FHIR logical ids allow [A-Za-z0-9.-]{1,64} — ISO timestamps carry ':' so use epoch millis.
+  const sampleKey = String(new Date(signals.sampledAt).getTime() || 0);
   const observation = (code: string, display: string, value: object) => ({
-    fullUrl: `urn:codebase-ekg:${repoUrn}:${code}:${signals.sampledAt}`,
+    fullUrl: `urn:codebase-ekg:${repoUrn}:${code}:${sampleKey}`,
     resource: {
       resourceType: 'Observation',
-      id: `ekg-${code}-${signals.sampledAt}`,
+      id: `ekg-${code}-${sampleKey}`.slice(0, 64),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       status: 'final',
       category: VITAL_SIGNS,

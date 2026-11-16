@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { hostname as osHostname } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import type { ViteDevServer } from 'vite';
 import { toFhirBundle } from '../shared/fhir.ts';
@@ -107,14 +108,13 @@ const server = createServer((req, res) => {
   const hostname = (req.headers.host ?? '').replace(/:\d+$/, '');
   // Wildcard binds can't match a concrete name — accept the socket's local
   // address (a real interface IP) plus loopback; a rebind Host still fails.
-  const bindName = host.includes(':') ? `[${host}]` : host;
   // Dual-stack: a v6 socket reports ::ffff:a.b.c.d for v4 clients — compare the
   // unmapped form too. Brackets are IPv6-only, so v4 goes in bare.
   const local = req.socket.localAddress ?? '';
   const localV4 = local.replace(/^::ffff:/, '');
-  const allowed = (wildcard
-    ? ['localhost', '127.0.0.1', '[::1]', `[${localV4}]`, localV4]
-    : ['localhost', '127.0.0.1', '[::1]', bindName]).filter(Boolean);
+  const allowed = wildcard
+    ? ['localhost', '127.0.0.1', '[::1]', `[${localV4}]`, localV4].filter(Boolean)
+    : ['localhost', '127.0.0.1', '[::1]', host.includes(':') ? `[${host}]` : host, osHostname()];
   if (!allowed.includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);
