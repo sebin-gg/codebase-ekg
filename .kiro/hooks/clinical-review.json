@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Clinical review of the vitals mapping",
+      "description": "Any change to how signals become vitals must keep the spec, the steering docs and the property-based tests in sync.",
+      "trigger": "PostFileSave",
+      "matcher": "src[\\\\/]shared[\\\\/](vitals|fhir)\\.ts$",
+      "action": {
+        "type": "agent",
+        "prompt": "You just changed the clinical mapping. Before continuing: (1) re-read the Correctness Properties in .kiro/specs/codebase-ekg/design.md and confirm each still holds or update it deliberately; (2) make sure every property has a matching fast-check test in test/vitals.test.ts; (3) keep the mapping table in .kiro/steering/product.md and any LOINC codes in .kiro/steering/clinical-accuracy.md in sync with the code; (4) run pnpm check."
+      }
+    }
+  ]
+}

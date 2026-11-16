@@ -1,0 +1,26 @@
+{
+  "name": "codebase-ekg",
+  "version": "0.1.0",
+  "description": "A bedside patient monitor for git repositories: commits are heartbeats, CI is SpO2, the PR backlog is blood pressure. Speaks HL7 FHIR.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --watch-path=src/server --watch-path=src/shared src/server/index.ts --dev",
+    "build": "vite build",
+    "start": "node src/server/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "check": "tsc && vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "fast-check": "^4.10.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

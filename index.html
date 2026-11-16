@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A bedside patient monitor for git repositories." />
+    <title>Codebase EKG | St. Kiro's Ward for Dying Repos</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23030806'/%3E%3Cpath d='M2 18h8l2-5 3 12 4-20 3 13h8' fill='none' stroke='%2339ff7a' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div class="monitor" id="monitor" data-rhythm="none">
+      <header class="bar top">
+        <div class="ward">ST. KIRO'S <span>WARD 13 / BED <b id="bed">--</b></span></div>
+        <div class="patient"><span id="patient">NO PATIENT</span><span id="source" class="tag">--</span></div>
+        <div class="meta">
+          <span id="sound" class="hint"></span>
+          <span id="insurance"></span>
+          <span id="sampled"></span>
+          <span id="clock">--:--:--</span>
+        </div>
+      </header>
+
+      <div class="alarm" id="alarm" role="alert" hidden></div>
+
+      <section class="screen">
+        <div class="traces">
+          <div class="trace ecg">
+            <span class="label">II &nbsp;x1.0 &nbsp;25 mm/s</span>
+            <canvas id="ecg" aria-label="ECG lead II"></canvas>
+            <div class="tod" id="tod" hidden>TIME OF DEATH<b id="tod-time"></b></div>
+          </div>
+          <div class="trace pleth">
+            <span class="label">PLETH</span>
+            <canvas id="pleth" aria-label="Plethysmograph"></canvas>
+          </div>
+          <div class="trace notes">
+            <span class="label">CHART NOTES</span>
+            <ol id="notes"><li class="empty">Awaiting admission.</li></ol>
+          </div>
+        </div>
+
+        <aside class="numerics">
+          <div class="num hr">
+            <span class="label">HR <i id="heart" class="heart"></i></span>
+            <b id="hr">--</b>
+            <em id="rhythm">--</em>
+            <small>bpm / commits</small>
+          </div>
+          <div class="num spo2">
+            <span class="label">SpO2</span>
+            <b id="spo2">--</b>
+            <small>% / CI pass rate</small>
+          </div>
+          <div class="num nibp">
+            <span class="label">NIBP</span>
+            <b id="nibp">--/--</b>
+            <small>mmHg / open PRs, issues</small>
+          </div>
+          <div class="num temp">
+            <span class="label">TEMP</span>
+            <b id="temp">--.-</b>
+            <small>&deg;C / 24h churn</small>
+          </div>
+          <div class="num bleed">
+            <span class="label">BLEED</span>
+            <b id="bleed">--</b>
+            <small>uncommitted files</small>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="bar bottom">
+        <span id="diagnosis" class="diagnosis">Awaiting admission.</span>
+        <span class="actions">
+          <button id="defib" class="defib" type="button" hidden>CHARGE 200J</button>
+          <button id="mute" type="button">MUTE</button>
+          <a id="fhir" class="button" target="_blank" rel="noopener" href="#">HL7 FHIR</a>
+          <button id="readmit" type="button">ADMIT</button>
+        </span>
+      </footer>
+    </div>
+
+    <dialog id="admit">
+      <form id="admit-form">
+        <h1>Admit a patient</h1>
+        <p>St. Kiro's accepts git repositories in any condition. Even the dead ones.</p>
+        <label>Source
+          <select name="source" id="admit-source">
+            <option value="github">GitHub repository</option>
+            <option value="local">Local repository</option>
+          </select>
+        </label>
+        <label>Patient
+          <input name="target" id="admit-target" placeholder="owner/repo" autocomplete="off" required />
+        </label>
+        <button type="submit">ADMIT</button>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/web/main.ts"></script>
+  </body>
+</html>

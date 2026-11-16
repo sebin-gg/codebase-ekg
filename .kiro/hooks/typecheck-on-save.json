@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck on save",
+      "description": "Type stripping means Node will happily run code that does not typecheck. Catch it the moment the agent saves a TypeScript file.",
+      "trigger": "PostFileSave",
+      "matcher": "\\.ts$",
+      "action": { "type": "command", "command": "pnpm typecheck" },
+      "timeout": 120
+    }
+  ]
+}

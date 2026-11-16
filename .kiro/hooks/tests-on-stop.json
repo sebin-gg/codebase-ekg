@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run the full check when the agent stops",
+      "description": "Typecheck plus unit, integration and property-based tests after every agent turn, so failures are reported back before the turn is accepted.",
+      "trigger": "Stop",
+      "action": { "type": "command", "command": "pnpm check" },
+      "timeout": 300
+    }
+  ]
+}
