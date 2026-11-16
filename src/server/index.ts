@@ -114,7 +114,9 @@ const server = createServer((req, res) => {
   const localV4 = local.replace(/^::ffff:/, '');
   const allowed = wildcard
     ? ['localhost', '127.0.0.1', '[::1]', `[${localV4}]`, localV4].filter(Boolean)
-    : ['localhost', '127.0.0.1', '[::1]', host.includes(':') ? `[${host}]` : host, osHostname()];
+    : ['localhost', '127.0.0.1', '[::1]', host.includes(':') ? `[${host}]` : host,
+      // A DNS name bound to a real interface is fine; on loopback it would be a rebind bypass.
+      ...(loopback ? [] : [osHostname()])];
   if (!allowed.includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);

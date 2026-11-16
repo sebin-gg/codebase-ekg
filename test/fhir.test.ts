@@ -21,7 +21,7 @@ describe('toFhirBundle', () => {
     // reference subject, an id, and the vital-signs profile.
     const hr = bundle.entry.find((e) => e.resource.code.coding[0]!.code === '8867-4')!.resource;
     expect(hr).toMatchObject({
-      id: expect.stringMatching(/^ekg-8867-4-\d+$/),
+      id: expect.stringMatching(/^ekg-8867-4-[A-Za-z0-9.-]+-\d+$/),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       subject: { reference: expect.stringMatching(/^Patient\//), display: 'github:acme/app' },
       effectiveDateTime: '2026-11-03T00:00:00.000Z',

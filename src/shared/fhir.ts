@@ -21,7 +21,8 @@ export function toFhirBundle({ signals, vitals }: Reading) {
     fullUrl: `urn:codebase-ekg:${repoUrn}:${code}:${sampleKey}`,
     resource: {
       resourceType: 'Observation',
-      id: `ekg-${code}-${sampleKey}`.slice(0, 64),
+      // Repo slug keeps ids unique across repositories sampled at the same time.
+      id: `ekg-${code}-${repoUrn.slice(0, 30)}-${sampleKey}`.slice(0, 64),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       status: 'final',
       category: VITAL_SIGNS,
