@@ -1,6 +1,6 @@
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, resolve, sep } from 'node:path';
+import { basename, delimiter, dirname, join, resolve, sep } from 'node:path';
 import type { RepoSignals } from '../../shared/types.ts';
 import { InputError } from '../errors.ts';
 import { githubSource, parseGithubTarget } from './github.ts';
@@ -45,8 +45,21 @@ export function openSource(kind: string, target: string, allowLocal: boolean): S
     // or a path listed in EKG_LOCAL_ROOT (PATH-delimiter separated). realpath
     // resolves symlinks so a link inside an allowed root can't point outside.
     const canon = (p: string) => {
-      let r: string;
-      try { r = realpathSync(p); } catch { r = resolve(p); }
+      // realpath only works on fully-existing paths; for missing targets,
+      // resolve the deepest existing ancestor so a symlinked path prefix
+      // pointing outside the roots can't smuggle the target through.
+      const abs = resolve(p);
+      let dir = abs;
+      let rest: string[] = [];
+      while (!existsSync(dir)) {
+        const parent = dirname(dir);
+        if (parent === dir) break; // fs root
+        rest.unshift(basename(dir));
+        dir = parent;
+      }
+      let r = dir;
+      try { r = realpathSync(dir); } catch { /* keep lexical */ }
+      r = rest.length ? join(r, ...rest) : r;
       return process.platform === 'win32' ? r.toLowerCase() : r;
     };
     const want = canon(dir);

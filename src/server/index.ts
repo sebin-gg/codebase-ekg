@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { hostname as osHostname } from 'node:os';
+import { allowedHosts } from './hostcheck.ts';
 import { extname, join, resolve, sep } from 'node:path';
 import type { ViteDevServer } from 'vite';
 import { toFhirBundle } from '../shared/fhir.ts';
@@ -110,21 +110,9 @@ const server = createServer((req, res) => {
   // address (a real interface IP) plus loopback; a rebind Host still fails.
   // Dual-stack: a v6 socket reports ::ffff:a.b.c.d for v4 clients — compare the
   // unmapped form too. Brackets are IPv6-only, so v4 goes in bare.
-  const local = req.socket.localAddress ?? '';
-  const localV4 = local.replace(/^::ffff:/, '');
-  const localIsV6 = local.includes(':') && !local.startsWith('::ffff:');
-  // Host is case-insensitive (RFC 9110); osHostname() comes back upper-cased
-  // on Windows while browsers send it lower-cased. On loopback the machine
-  // name would be a DNS-rebind bypass, so it's excluded there.
-  const machine = osHostname().toLowerCase();
-  const allowed = new Set(
-    (wildcard
-      ? ['localhost', '127.0.0.1', '[::1]', localV4, localIsV6 ? `[${local}]` : '', machine]
-      : ['localhost', '127.0.0.1', '[::1]', host.includes(':') ? `[${host}]` : host,
-        ...(loopback ? [] : [machine])]
-    ).filter(Boolean).map((h) => h.toLowerCase()),
-  );
-  if (!allowed.has(hostname.toLowerCase())) return send(res, 421, { error: 'Misdirected request' });
+  if (!allowedHosts(host, wildcard, loopback, req.socket.localAddress ?? '').has(hostname.toLowerCase())) {
+    return send(res, 421, { error: 'Misdirected request' });
+  }
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);
   if (vite) return vite.middlewares(req, res);
