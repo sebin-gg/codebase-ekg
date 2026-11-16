@@ -19,14 +19,19 @@ describe('toFhirBundle', () => {
     expect(Math.abs(Date.parse(bundle.timestamp) - Date.now())).toBeLessThan(60_000);
     // Observations carry the sample time as effectiveDateTime, a Patient
     // reference subject, an id, and the vital-signs profile.
-    const hr = bundle.entry.find((e) => e.resource.code.coding[0]!.code === '8867-4')!.resource;
+    type Obs = { resource: { code: { coding: { code: string }[] } } & Record<string, unknown> };
+    const obs = bundle.entry.filter((e) => e.resource.resourceType === 'Observation') as Obs[];
+    const patient = bundle.entry.find((e) => e.resource.resourceType === 'Patient')!.resource;
+    expect(patient).toBeDefined();
+    const hr = obs.find((e) => e.resource.code.coding[0]!.code === '8867-4')!.resource;
+
     expect(hr).toMatchObject({
       id: expect.stringMatching(/^ekg-8867-4-[A-Za-z0-9.-]+-\d+$/),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       subject: { reference: expect.stringMatching(/^Patient\//), display: 'github:acme/app' },
       effectiveDateTime: '2026-11-03T00:00:00.000Z',
     });
-    const byCode = Object.fromEntries(bundle.entry.map((e) => [e.resource.code.coding[0]!.code, e.resource as Record<string, unknown>]));
+    const byCode = Object.fromEntries(obs.map((e) => [e.resource.code.coding[0]!.code, e.resource as Record<string, unknown>]));
     expect(Object.keys(byCode).sort()).toEqual(['59408-5', '8310-5', '85354-9', '8867-4']);
     expect(byCode['8867-4']).toMatchObject({ valueQuantity: { value: 72, code: '/min', system: 'http://unitsofmeasure.org' } });
     expect(byCode['85354-9']).toMatchObject({
@@ -39,6 +44,7 @@ describe('toFhirBundle', () => {
 
   it('omits vitals the source could not measure', () => {
     const bundle = toFhirBundle({ ...reading, vitals: { ...reading.vitals, spo2: null, bp: null } });
-    expect(bundle.entry.map((e) => e.resource.code.coding[0]!.code)).toEqual(['8867-4', '8310-5']);
+    expect(bundle.entry.filter((e) => e.resource.resourceType === 'Observation')
+      .map((e) => (e.resource as { code: { coding: { code: string }[] } }).code.coding[0]!.code)).toEqual(['8867-4', '8310-5']);
   });
 });

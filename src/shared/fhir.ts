@@ -22,12 +22,14 @@ export function toFhirBundle({ signals, vitals }: Reading) {
   const repoUrn = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-')}-${repoHash}`;
   // FHIR logical ids allow [A-Za-z0-9.-]{1,64} — ISO timestamps carry ':' so use epoch millis.
   const sampleKey = String(new Date(signals.sampledAt).getTime() || 0);
+  // Slug bounded so the hash always survives inside the 64-char id budget.
+  const idSlug = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-').slice(0, 20)}-${repoHash}`;
   const observation = (code: string, display: string, value: object) => ({
     fullUrl: `urn:codebase-ekg:${repoUrn}:${code}:${sampleKey}`,
     resource: {
       resourceType: 'Observation',
       // Repo slug keeps ids unique across repositories sampled at the same time.
-      id: `ekg-${code}-${repoUrn.slice(0, 30)}-${sampleKey}`.slice(0, 64),
+      id: `ekg-${code}-${idSlug}-${sampleKey}`.slice(0, 64),
       meta: { profile: ['http://hl7.org/fhir/StructureDefinition/vitalsigns'] },
       status: 'final',
       category: VITAL_SIGNS,
@@ -55,5 +57,10 @@ export function toFhirBundle({ signals, vitals }: Reading) {
       ],
     }));
   }
-  return { resourceType: 'Bundle', type: 'collection', timestamp: new Date().toISOString(), entry };
+  // Include the Patient so `subject.reference` resolves inside this bundle.
+  const patient = {
+    fullUrl: `urn:codebase-ekg:patient:${repoUrn}`,
+    resource: { resourceType: 'Patient', id: patientId, name: [{ text: rawKey }] },
+  };
+  return { resourceType: 'Bundle', type: 'collection', timestamp: new Date().toISOString(), entry: [patient, ...entry] };
 }
