@@ -81,10 +81,12 @@ function runTests(cwd: string, cmd: string): Promise<CheckTally> {
       return resolve({ passed: 0, failed: 1, pending: 0 });
     }
     const resolved = resolveCmd(file, cwd) ?? { file, shell: false };
-    // cmd.exe needs the whole command line as one string after /c. %VAR% in args
-    // still expands under cmd, but EKG_TEST_CMD is operator-supplied input.
+    // cmd.exe needs the whole command line as one string after /c, and /s strips
+    // the first+last quote — so the payload gets its own outer pair. %VAR% in
+    // args still expands under cmd, but EKG_TEST_CMD is operator-supplied input.
+    const inner = `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`;
     const [bin, argv2] = resolved.shell
-      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`]]
+      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${inner}"`]]
       : [resolved.file, args];
     execFile(bin, argv2, {
       cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,

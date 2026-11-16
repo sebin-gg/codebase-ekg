@@ -12,9 +12,14 @@ const quantity = (value: number, unit: string, code: string) => ({ value, unit, 
 /** Renders a reading as an HL7 FHIR R4 collection Bundle of LOINC-coded vital-sign Observations. */
 export function toFhirBundle({ signals, vitals }: Reading) {
   const effectiveDateTime = new Date(signals.sampledAt).toISOString();
-  const patientId = `${signals.source}-${signals.repo}`.replace(/[^A-Za-z0-9.-]/g, '-').slice(0, 64);
-  const subject = { reference: `Patient/${patientId}`, display: `${signals.source}:${signals.repo}` };
-  const repoUrn = `${signals.source}-${signals.repo}`.replace(/[^A-Za-z0-9.-]/g, '-');
+  // Slugs lose information (a/b == a-b) — a short hash keeps ids unique across repos.
+  const rawKey = `${signals.source}:${signals.repo}`;
+  let h = 5381;
+  for (const c of rawKey) h = ((h << 5) + h + c.charCodeAt(0)) | 0;
+  const repoHash = (h >>> 0).toString(36);
+  const patientId = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-').slice(0, 55)}-${repoHash}`;
+  const subject = { reference: `Patient/${patientId}`, display: rawKey };
+  const repoUrn = `${rawKey.replace(/[^A-Za-z0-9.-]/g, '-')}-${repoHash}`;
   // FHIR logical ids allow [A-Za-z0-9.-]{1,64} — ISO timestamps carry ':' so use epoch millis.
   const sampleKey = String(new Date(signals.sampledAt).getTime() || 0);
   const observation = (code: string, display: string, value: object) => ({
