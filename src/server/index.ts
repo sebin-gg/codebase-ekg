@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { allowedHosts } from './hostcheck.ts';
 import { extname, join, resolve, sep } from 'node:path';
 import type { ViteDevServer } from 'vite';
 import { toFhirBundle } from '../shared/fhir.ts';
@@ -12,6 +13,7 @@ const dev = process.argv.includes('--dev');
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 1313);
 const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
+const wildcard = ['0.0.0.0', '::'].includes(host);
 const allowLocal = process.env.EKG_ALLOW_LOCAL ? process.env.EKG_ALLOW_LOCAL === '1' : loopback;
 const dist = resolve(import.meta.dirname, '../../dist');
 const MIME: Record<string, string> = {
@@ -104,7 +106,13 @@ let vite: ViteDevServer | undefined;
 
 const server = createServer((req, res) => {
   const hostname = (req.headers.host ?? '').replace(/:\d+$/, '');
-  if (loopback && !['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
+  // Wildcard binds can't match a concrete name — accept the socket's local
+  // address (a real interface IP) plus loopback; a rebind Host still fails.
+  // Dual-stack: a v6 socket reports ::ffff:a.b.c.d for v4 clients — compare the
+  // unmapped form too. Brackets are IPv6-only, so v4 goes in bare.
+  if (!allowedHosts(host, wildcard, loopback, req.socket.localAddress ?? '').has(hostname.toLowerCase())) {
+    return send(res, 421, { error: 'Misdirected request' });
+  }
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);
   if (vite) return vite.middlewares(req, res);

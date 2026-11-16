@@ -1,8 +1,9 @@
-import { exec, execFile } from 'node:child_process';
-import { basename } from 'node:path';
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { basename, extname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { CheckTally, CommitNote, RepoSignals } from '../../shared/types.ts';
-import { InputError } from '../errors.ts';
+import { InputError, messageOf } from '../errors.ts';
 import type { Source } from './types.ts';
 
 const execFileP = promisify(execFile);
@@ -41,9 +42,59 @@ export function tallyTestOutput(output: string, exitCode: number): CheckTally {
   return { passed: passed ?? 0, failed: failed ?? (exitCode === 0 ? 0 : 1), pending: 0 };
 }
 
+/** Resolves `file` on PATH; returns it directly, or via ComSpec for .cmd/.bat
+ *  shims which cannot be spawned without a shell on Windows. */
+function resolveCmd(file: string, cwd: string): { file: string; shell: boolean } | null {
+  if (process.platform !== 'win32') return { file, shell: false };
+  const shellExts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';').map((e) => e.toLowerCase());
+  const asResult = (full: string) => ({ file: full, shell: ['.cmd', '.bat'].includes(extname(full).toLowerCase()) });
+  // Path-qualified names (absolute or containing separators) resolve against the repo cwd.
+  if (/[/\\]/.test(file)) {
+    const full = resolve(cwd, file);
+    if (existsSync(full)) return asResult(full);
+    for (const ext of shellExts) {
+      if (existsSync(full + ext)) return asResult(full + ext);
+    }
+    return null;
+  }
+  // Windows resolves directory-major; PATH entries may carry quotes.
+  const dirs = (process.env.PATH ?? '').split(';').map((d) => d.replace(/^"|"$/g, '')).filter(Boolean);
+  for (const dir of dirs) {
+    for (const ext of ['', ...shellExts]) {
+      const full = join(dir, file + ext);
+      if (existsSync(full)) return asResult(full);
+    }
+  }
+  return null;
+}
+
 function runTests(cwd: string, cmd: string): Promise<CheckTally> {
+  // Tokenize without a shell: the env var is trusted input, but keeping it
+  // out of shell interpretation removes an injection surface entirely.
+  const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [])
+    // Remove quote delimiters wherever they wrap a span (`--eval="x"` → `--eval=x`).
+    .map((t) => t.replace(/"([^"]*)"|'([^']*)'/g, (_m, d: string | undefined, s: string | undefined) => d ?? s ?? ''));
+  const [file, ...args] = argv;
   return new Promise((resolve) => {
-    exec(cmd, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
+    if (!file) {
+      process.stderr.write(`ekg: EKG_TEST_CMD is empty or unparseable: ${JSON.stringify(cmd)}\n`);
+      return resolve({ passed: 0, failed: 1, pending: 0 });
+    }
+    const resolved = resolveCmd(file, cwd) ?? { file, shell: false };
+    // cmd.exe needs the whole command line as one string after /c, and /s strips
+    // the first+last quote — so the payload gets its own outer pair. %VAR% in
+    // args still expands under cmd, but EKG_TEST_CMD is operator-supplied input.
+    const inner = `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`;
+    const [bin, argv2] = resolved.shell
+      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${inner}"`]]
+      : [resolved.file, args];
+    execFile(bin, argv2, {
+      cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
+      // The /c payload is a hand-quoted command line; Node's default re-quoting
+      // would escape the embedded quotes as \" which cmd.exe can't parse.
+      windowsVerbatimArguments: resolved.shell,
+    }, (err, stdout, stderr) =>
       resolve(tallyTestOutput(`${stdout}\n${stderr}`, err ? 1 : 0)));
   });
 }
@@ -77,7 +128,8 @@ export function localSource(dir: string, testCmd = process.env.EKG_TEST_CMD): So
       }
 
       const since = `--since=${new Date(now - 24 * HOUR).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
-      const log = (extra: string[]) => git(cwd, ['log', '--branches', '--remotes', '--numstat', FORMAT, ...extra]).catch(() => '');
+      const log = (extra: string[]) => git(cwd, ['log', '--branches', '--remotes', '--numstat', FORMAT, ...extra])
+        .catch((e: unknown) => { process.stderr.write(`ekg: git log failed in ${cwd}: ${messageOf(e)}\n`); return ''; });
       const [recentOut, dayOut, statusOut] = await Promise.all([
         log(['-n', '12']),
         log([since]),

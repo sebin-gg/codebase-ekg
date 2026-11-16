@@ -58,6 +58,12 @@ export function tallyChecks(runs: GhCheckRuns | null, status: GhStatus | null): 
 export function githubSource(slug: string, token = process.env.GITHUB_TOKEN, fetchImpl: typeof fetch = fetch): Source {
   const etags = new Map<string, { etag: string; hit: Fetched<unknown> }>();
   const linesBySha = new Map<string, number>();
+  // Caches are bounded: LRU-evict past the cap so long sessions don't leak.
+  const put = <K, V>(m: Map<K, V>, k: K, v: V, max = 1024) => {
+    m.delete(k); // re-insert moves the key to the most-recent position
+    if (m.size >= max) m.delete(m.keys().next().value as K);
+    m.set(k, v);
+  };
   const detailBudget = token ? 30 : 4;
   let remaining: number | null = null;
 
@@ -84,7 +90,7 @@ export function githubSource(slug: string, token = process.env.GITHUB_TOKEN, fet
     if (!res.ok) throw new HttpError(res.status, describe(res.status, path, left));
     const fetched: Fetched<T> = { body: (await res.json()) as T, link: res.headers.get('link') };
     const etag = res.headers.get('etag');
-    if (cache && etag) etags.set(path, { etag, hit: fetched });
+    if (cache && etag) put(etags, path, { etag, hit: fetched });
     return fetched;
   }
 
@@ -120,7 +126,7 @@ export function githubSource(slug: string, token = process.env.GITHUB_TOKEN, fet
       }));
       await Promise.all(notes.slice(0, detailBudget).filter((n) => !linesBySha.has(n.sha)).map((n) =>
         get<{ stats?: { total: number } }>(`/repos/${slug}/commits/${n.sha}`, false)
-          .then((r) => { linesBySha.set(n.sha, r.body.stats?.total ?? 0); }, () => {})));
+          .then((r) => { put(linesBySha, n.sha, r.body.stats?.total ?? 0); }, () => {})));
       for (const n of notes) n.lines = linesBySha.get(n.sha) ?? null;
 
       const day = notes.filter((n) => n.at >= now - DAY);
