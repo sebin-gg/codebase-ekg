@@ -22,7 +22,7 @@ const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word
 export function heartRate(commitsLast24h: number, commitsLastHour: number): number {
   // commitsLast24h already includes the last hour, so weight it 2x extra (3x total).
   const hour = Math.min(Math.max(0, commitsLastHour), Math.max(0, commitsLast24h));
-  const activity = Math.max(0, commitsLast24h) - hour + 3 * hour;
+  const activity = Math.max(0, commitsLast24h) + 2 * hour; // 1x in 24h + 2x extra = 3x total
   return Math.round(clamp(48 + 22 * Math.log2(1 + activity), LIMITS.minBpm, LIMITS.maxBpm));
 }
 

@@ -108,9 +108,13 @@ const server = createServer((req, res) => {
   // Wildcard binds can't match a concrete name — accept the socket's local
   // address (a real interface IP) plus loopback; a rebind Host still fails.
   const bindName = host.includes(':') ? `[${host}]` : host;
-  const allowed = wildcard
-    ? ['localhost', '127.0.0.1', '[::1]', `[${req.socket.localAddress ?? ''}]`, req.socket.localAddress ?? '']
-    : ['localhost', '127.0.0.1', '[::1]', bindName];
+  // Dual-stack: a v6 socket reports ::ffff:a.b.c.d for v4 clients — compare the
+  // unmapped form too. Brackets are IPv6-only, so v4 goes in bare.
+  const local = req.socket.localAddress ?? '';
+  const localV4 = local.replace(/^::ffff:/, '');
+  const allowed = (wildcard
+    ? ['localhost', '127.0.0.1', '[::1]', `[${localV4}]`, localV4]
+    : ['localhost', '127.0.0.1', '[::1]', bindName]).filter(Boolean);
   if (!allowed.includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);

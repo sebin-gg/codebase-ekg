@@ -46,6 +46,10 @@ export function tallyTestOutput(output: string, exitCode: number): CheckTally {
  *  shims which cannot be spawned without a shell on Windows. */
 function resolveCmd(file: string): { file: string; shell: boolean } | null {
   if (process.platform !== 'win32') return { file, shell: false };
+  // Path-qualified names (absolute or containing separators) resolve directly.
+  if (/[/\\]/.test(file)) {
+    return existsSync(file) ? { file, shell: /\.(cmd|bat)$/i.test(file) } : null;
+  }
   const dirs = (process.env.PATH ?? '').split(';').filter(Boolean);
   for (const ext of ['', '.exe', '.cmd', '.bat']) {
     for (const dir of dirs) {
@@ -67,8 +71,9 @@ function runTests(cwd: string, cmd: string): Promise<CheckTally> {
       return resolve({ passed: 0, failed: 1, pending: 0 });
     }
     const resolved = resolveCmd(file) ?? { file, shell: false };
+    // cmd.exe needs the whole command line as one string after /c.
     const [bin, argv2] = resolved.shell
-      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"`, ...args]]
+      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"${args.map((a) => ` "${a.replace(/"/g, '""')}"`).join('')}`]]
       : [resolved.file, args];
     execFile(bin, argv2, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
       resolve(tallyTestOutput(`${stdout}\n${stderr}`, err ? 1 : 0)));
