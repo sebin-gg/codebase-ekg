@@ -70,6 +70,17 @@ describe('assess: correctness properties', () => {
     }));
   });
 
+  it('heart rate weights the last hour 3x, not 4x', () => {
+    // Spec curve: 0 -> 48, 1 -> 70, 7 -> 114, 63 -> 180.
+    expect(heartRate(0, 0)).toBe(48);
+    expect(heartRate(1, 0)).toBe(70);
+    expect(heartRate(7, 0)).toBe(114);
+    expect(heartRate(63, 0)).toBe(180);
+    // A commit inside the last hour counts once in the 24h base + 2x extra.
+    expect(heartRate(1, 1)).toBe(92);   // activity 3
+    expect(heartRate(7, 7)).toBe(146);  // activity 21 -> 48+22*log2(22)
+  });
+
   it('P5: SpO2 is 70-99 and monotonic in pass rate, or unknown when nothing finished', () => {
     fc.assert(fc.property(fc.nat(300), fc.nat(300), fc.nat(10), (passed, failed, pending) => {
       const spo2 = oxygen({ passed, failed, pending });

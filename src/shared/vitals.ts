@@ -21,7 +21,8 @@ const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word
 /** Commits in the last 24h, with the last hour weighted 3x, on a log curve: 0 -> 48, 1 -> 70, 7 -> 114, 63 -> 180. */
 export function heartRate(commitsLast24h: number, commitsLastHour: number): number {
   // commitsLast24h already includes the last hour, so weight it 2x extra (3x total).
-  const activity = Math.max(0, commitsLast24h - commitsLastHour) + 3 * Math.max(0, commitsLastHour);
+  const hour = Math.min(Math.max(0, commitsLastHour), Math.max(0, commitsLast24h));
+  const activity = Math.max(0, commitsLast24h) - hour + 3 * hour;
   return Math.round(clamp(48 + 22 * Math.log2(1 + activity), LIMITS.minBpm, LIMITS.maxBpm));
 }
 

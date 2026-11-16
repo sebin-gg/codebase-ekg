@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { basename } from 'node:path';
+import { existsSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { CheckTally, CommitNote, RepoSignals } from '../../shared/types.ts';
 import { InputError, messageOf } from '../errors.ts';
@@ -41,14 +42,35 @@ export function tallyTestOutput(output: string, exitCode: number): CheckTally {
   return { passed: passed ?? 0, failed: failed ?? (exitCode === 0 ? 0 : 1), pending: 0 };
 }
 
+/** Resolves `file` on PATH; returns it directly, or via ComSpec for .cmd/.bat
+ *  shims which cannot be spawned without a shell on Windows. */
+function resolveCmd(file: string): { file: string; shell: boolean } | null {
+  if (process.platform !== 'win32') return { file, shell: false };
+  const dirs = (process.env.PATH ?? '').split(';').filter(Boolean);
+  for (const ext of ['', '.exe', '.cmd', '.bat']) {
+    for (const dir of dirs) {
+      const full = join(dir, file + ext);
+      if (existsSync(full)) return { file: full, shell: ext === '.cmd' || ext === '.bat' };
+    }
+  }
+  return null;
+}
+
 function runTests(cwd: string, cmd: string): Promise<CheckTally> {
   // Tokenize without a shell: the env var is trusted input, but keeping it
   // out of shell interpretation removes an injection surface entirely.
   const argv = (cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ''));
   const [file, ...args] = argv;
   return new Promise((resolve) => {
-    if (!file) return resolve({ passed: 0, failed: 1, pending: 0 });
-    execFile(file, args, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
+    if (!file) {
+      process.stderr.write(`ekg: EKG_TEST_CMD is empty or unparseable: ${JSON.stringify(cmd)}\n`);
+      return resolve({ passed: 0, failed: 1, pending: 0 });
+    }
+    const resolved = resolveCmd(file) ?? { file, shell: false };
+    const [bin, argv2] = resolved.shell
+      ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${resolved.file}"`, ...args]]
+      : [resolved.file, args];
+    execFile(bin, argv2, { cwd, timeout: 180_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
       resolve(tallyTestOutput(`${stdout}\n${stderr}`, err ? 1 : 0)));
   });
 }

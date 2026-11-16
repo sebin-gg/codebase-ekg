@@ -58,8 +58,9 @@ export function tallyChecks(runs: GhCheckRuns | null, status: GhStatus | null): 
 export function githubSource(slug: string, token = process.env.GITHUB_TOKEN, fetchImpl: typeof fetch = fetch): Source {
   const etags = new Map<string, { etag: string; hit: Fetched<unknown> }>();
   const linesBySha = new Map<string, number>();
-  // Caches are bounded: FIFO-evict past the cap so long sessions don't leak.
+  // Caches are bounded: LRU-evict past the cap so long sessions don't leak.
   const put = <K, V>(m: Map<K, V>, k: K, v: V, max = 1024) => {
+    m.delete(k); // re-insert moves the key to the most-recent position
     if (m.size >= max) m.delete(m.keys().next().value as K);
     m.set(k, v);
   };

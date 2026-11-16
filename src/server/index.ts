@@ -105,7 +105,13 @@ let vite: ViteDevServer | undefined;
 
 const server = createServer((req, res) => {
   const hostname = (req.headers.host ?? '').replace(/:\d+$/, '');
-  if (!wildcard && !['localhost', '127.0.0.1', '[::1]', host].includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
+  // Wildcard binds can't match a concrete name — accept the socket's local
+  // address (a real interface IP) plus loopback; a rebind Host still fails.
+  const bindName = host.includes(':') ? `[${host}]` : host;
+  const allowed = wildcard
+    ? ['localhost', '127.0.0.1', '[::1]', `[${req.socket.localAddress ?? ''}]`, req.socket.localAddress ?? '']
+    : ['localhost', '127.0.0.1', '[::1]', bindName];
+  if (!allowed.includes(hostname)) return send(res, 421, { error: 'Misdirected request' });
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/api/')) return void api(req, res, url);
   if (vite) return vite.middlewares(req, res);

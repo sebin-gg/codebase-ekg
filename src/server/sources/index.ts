@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve, sep } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import type { RepoSignals } from '../../shared/types.ts';
 import { InputError } from '../errors.ts';
 import { githubSource, parseGithubTarget } from './github.ts';
@@ -39,12 +40,19 @@ export function openSource(kind: string, target: string, allowLocal: boolean): S
   } else if (kind === 'local') {
     if (!allowLocal) throw new InputError('Local admissions are disabled on this server');
     if (!target.trim()) throw new InputError('Give the path to a local git repository');
-    const dir = resolve(target.trim());
+    const dir = resolve(target.trim().replace(/^~(?=$|[/\\])/, homedir()));
     // Confinement: local repos must live under the server cwd, the user's home,
-    // or a path listed in EKG_LOCAL_ROOT (';' separated).
+    // or a path listed in EKG_LOCAL_ROOT (';' separated). realpath resolves
+    // symlinks so a link inside an allowed root can't point outside it.
+    const canon = (p: string) => {
+      let r: string;
+      try { r = realpathSync(p); } catch { r = resolve(p); }
+      return process.platform === 'win32' ? r.toLowerCase() : r;
+    };
+    const want = canon(dir);
     const roots = [process.cwd(), homedir(), ...(process.env.EKG_LOCAL_ROOT ?? '').split(';').filter(Boolean)]
-      .map((r) => resolve(r));
-    if (!roots.some((r) => dir === r || dir.startsWith(r + sep))) {
+      .map((r) => canon(r));
+    if (!roots.some((r) => want === r || want.startsWith(r.endsWith(sep) ? r : r + sep))) {
       throw new InputError('Local patients must live under the server cwd, your home directory, or EKG_LOCAL_ROOT');
     }
     key = `local:${dir}`;
